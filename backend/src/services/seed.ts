@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { getTable, getPasswordStore } from './store';
+import { getTable, getPasswordStore, loadFromDisk, saveToDisk } from './store';
 import { hashData } from '../utils/hashing';
 import { REVENUE_SPLIT, SENSOR_RANGES, ANOMALY_THRESHOLDS, LITERS_PER_WSC } from '../utils/constants';
 
@@ -47,7 +47,17 @@ const DEMO_PROJECTS = [
 // ─── Seed Function ───────────────────────────────────────────────────────────
 
 export function seedData(): void {
-  console.log('Seeding in-memory data store...');
+  // Try loading persisted data from disk first
+  const loaded = loadFromDisk();
+  if (loaded) {
+    const users = getTable<Record<string, unknown>>('users');
+    const readings = getTable<Record<string, unknown>>('sensor_readings');
+    console.log(`Loaded persisted data from disk: ${users.length} users, ${readings.length} readings, and more.`);
+    console.log('  ℹ To reset to fresh demo data, delete backend/data/store.json and restart.');
+    return;
+  }
+
+  console.log('No persisted data found. Seeding in-memory data store...');
   const passwords = getPasswordStore();
   const users = getTable<Record<string, unknown>>('users');
   const projects = getTable<Record<string, unknown>>('water_projects');
@@ -362,4 +372,8 @@ export function seedData(): void {
   }
 
   console.log(`Seed complete. Total records: ${users.length + projects.length + readings.length + mintingEvents.length + listings.length + trades.length + retirements.length + rewards.length + notifications.length}`);
+
+  // Persist the freshly seeded data to disk
+  saveToDisk();
+  console.log('  ✓ Data persisted to backend/data/store.json');
 }
