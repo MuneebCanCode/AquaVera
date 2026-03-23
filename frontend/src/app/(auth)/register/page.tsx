@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Droplets, UserPlus, Wallet } from 'lucide-react';
+import { ArrowLeft, Droplets, UserPlus, Wallet } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useWallet } from '@/lib/wallet';
 import { truncateAddress } from '@/lib/wallet-utils';
@@ -115,7 +115,16 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-light-gray px-4 py-12">
+    <main className="min-h-screen flex items-center justify-center bg-light-gray px-4 py-12 relative">
+      {/* Back to Home */}
+      <Link
+        href="/"
+        className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Home
+      </Link>
+
       <div className="w-full max-w-md">
         {/* Logo */}
         <Link href="/" className="flex items-center justify-center gap-2 mb-8">

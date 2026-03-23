@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Droplets, Eye, EyeOff, LogIn } from 'lucide-react';
+import { ArrowLeft, Droplets, Eye, EyeOff, LogIn } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -50,7 +50,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-light-gray px-4 py-12">
+    <main className="min-h-screen flex items-center justify-center bg-light-gray px-4 py-12 relative">
+      {/* Back to Home */}
+      <Link
+        href="/"
+        className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Home
+      </Link>
+
       <div className="w-full max-w-md">
         {/* Logo */}
         <Link href="/" className="flex items-center justify-center gap-2 mb-8">
