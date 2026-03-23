@@ -1,9 +1,46 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { getSupabase } from '../services/supabase';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
 import { LITERS_PER_WSC } from '../utils/constants';
 
 const router = Router();
+
+// ─── In-memory cache for platform stats (public endpoint, refreshes every 30s) ──
+let platformStatsCache: { data: Record<string, unknown>; ts: number } | null = null;
+const PLATFORM_CACHE_TTL = 30_000;
+
+// GET /api/dashboard/stats/platform — Public platform stats (no auth required)
+router.get('/stats/platform', async (_req: Request, res: Response, next) => {
+  try {
+    const now = Date.now();
+    if (platformStatsCache && now - platformStatsCache.ts < PLATFORM_CACHE_TTL) {
+      res.json({ success: true, data: platformStatsCache.data });
+      return;
+    }
+
+    const supabase = getSupabase();
+    const [projectsRes, mintRes, buyersRes, retirementsRes] = await Promise.all([
+      supabase.from('water_projects').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+      supabase.from('water_projects').select('total_wsc_minted'),
+      supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'corporate_buyer'),
+      supabase.from('retirements').select('quantity_wsc_retired'),
+    ]);
+
+    const totalWscMinted = (mintRes.data || []).reduce((sum: number, p: { total_wsc_minted: number }) => sum + p.total_wsc_minted, 0);
+    const totalCreditsRetired = (retirementsRes.data || []).reduce((sum: number, r: { quantity_wsc_retired: number }) => sum + r.quantity_wsc_retired, 0);
+
+    const data = {
+      totalWscMinted,
+      totalLitersVerified: totalWscMinted * LITERS_PER_WSC,
+      totalActiveProjects: projectsRes.count || 0,
+      totalCorporateBuyers: buyersRes.count || 0,
+      totalCreditsRetired,
+    };
+
+    platformStatsCache = { data, ts: now };
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+});
 
 // GET /api/dashboard/stats — Aggregated dashboard statistics
 router.get('/stats', requireAuth, async (req: AuthenticatedRequest, res: Response, next) => {
