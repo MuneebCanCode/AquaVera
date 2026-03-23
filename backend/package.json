@@ -1,0 +1,39 @@
+{
+  "name": "aquavera-backend",
+  "version": "1.0.0",
+  "description": "AquaVera — Tokenized Water Stewardship Credit Marketplace Backend",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "setup-hedera": "ts-node scripts/setup-hedera.ts",
+    "seed-mock-data": "ts-node scripts/seed-mock-data.ts",
+    "seed-hedera": "ts-node scripts/seed-hedera.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hashgraph/sdk": "^2.51.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.5.0",
+    "@types/uuid": "^10.0.0",
+    "fast-check": "^3.22.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
