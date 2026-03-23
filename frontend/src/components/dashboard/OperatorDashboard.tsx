@@ -40,8 +40,33 @@ export function OperatorDashboard({ user }: Props) {
       api.get<WaterProject[]>(withExplore('/projects')),
       api.get<Record<string, unknown>>(withExplore('/dashboard/stats')),
     ]).then(([projRes, statsRes]) => {
-      if (projRes.success && projRes.data) setProjects(projRes.data);
+      const loadedProjects = projRes.success && projRes.data ? projRes.data : [];
+      setProjects(loadedProjects);
       if (statsRes.success && statsRes.data) setStats(statsRes.data as Record<string, number>);
+
+      // Fetch sensor chart data for first project in parallel (avoid waterfall)
+      if (loadedProjects.length > 0) {
+        api.get<{ data: SensorReading[] }>(`/sensors/${loadedProjects[0].id}?limit=200`)
+          .then((res) => {
+            if (res.success && res.data) {
+              const readings = Array.isArray(res.data) ? res.data : res.data.data || [];
+              const grouped = readings.reduce<Record<string, number[]>>((acc, r) => {
+                const day = r.reading_timestamp.slice(0, 10);
+                if (!acc[day]) acc[day] = [];
+                acc[day].push(r.flow_rate_liters_per_min);
+                return acc;
+              }, {});
+              const chart = Object.entries(grouped)
+                .map(([date, vals]) => ({
+                  date,
+                  flow_rate: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 100) / 100,
+                }))
+                .sort((a, b) => a.date.localeCompare(b.date))
+                .slice(-30);
+              setChartData(chart);
+            }
+          });
+      }
     }).finally(() => setLoading(false));
   }, []);
 
@@ -60,32 +85,6 @@ export function OperatorDashboard({ user }: Props) {
       setWalletBalance(null);
     }
   }, [wallet.status]);
-
-  // Load sensor chart data for first project
-  useEffect(() => {
-    if (projects.length > 0) {
-      api.get<{ data: SensorReading[] }>(`/sensors/${projects[0].id}?limit=200`)
-        .then((res) => {
-          if (res.success && res.data) {
-            const readings = Array.isArray(res.data) ? res.data : res.data.data || [];
-            const grouped = readings.reduce<Record<string, number[]>>((acc, r) => {
-              const day = r.reading_timestamp.slice(0, 10);
-              if (!acc[day]) acc[day] = [];
-              acc[day].push(r.flow_rate_liters_per_min);
-              return acc;
-            }, {});
-            const chart = Object.entries(grouped)
-              .map(([date, vals]) => ({
-                date,
-                flow_rate: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 100) / 100,
-              }))
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .slice(-30);
-            setChartData(chart);
-          }
-        });
-    }
-  }, [projects]);
 
   async function handleSimulate(projectId: string) {
     setSimulating(projectId);
