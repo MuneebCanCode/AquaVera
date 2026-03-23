@@ -103,7 +103,7 @@ export function Header({ unreadCount = 0 }: HeaderProps) {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
-                <span className="text-sm font-mono text-gray-700">{truncateAddress(wallet.evmAddress)}</span>
+                <span className="text-sm font-mono text-gray-700">Wallet Connected</span>
                 <button
                   onClick={() => wallet.disconnect()}
                   className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
