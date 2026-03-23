@@ -1,4 +1,4 @@
-import { getDB, getTable, getPasswordStore, getTokenStore } from './store';
+import { getDB, getTable, getPasswordStore, getTokenStore, triggerSave } from './store';
 import { createAccount } from '../hedera/has.service';
 import { createDID } from '../hedera/did.service';
 import { associateTokens } from '../hedera/hts.service';
@@ -84,6 +84,9 @@ export async function register(input: RegisterInput): Promise<User> {
       updated_at: new Date().toISOString(),
     });
 
+    // Persist to disk after successful registration
+    triggerSave();
+
     return userRecord as unknown as User;
   } catch (error) {
     // Rollback
@@ -92,6 +95,7 @@ export async function register(input: RegisterInput): Promise<User> {
       if (idx >= 0) users.splice(idx, 1);
     }
     passwords.delete(input.email);
+    triggerSave();
     throw error;
   }
 }
