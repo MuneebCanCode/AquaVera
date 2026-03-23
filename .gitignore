@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Keep example env files
+!.env.example
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Build output
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# Kiro specs (optional — remove this line if you want specs in the repo)
+# .kiro/
+
+# Misc
+coverage/
+.vercel
