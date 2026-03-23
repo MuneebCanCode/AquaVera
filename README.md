@@ -11,18 +11,22 @@ frontend/          Next.js 14+ (App Router, Tailwind CSS, Recharts)
 backend/           Express + TypeScript (In-Memory Store, Hedera SDK)
 ```
 
-### Hedera Services Used
+### Deep Hedera Integration — 12 Services
 
 | Service | Purpose |
 |---------|---------|
-| HTS (Token Service) | WSC fungible token, AVIC NFT collection, AVUSD stablecoin |
-| HCS (Consensus Service) | Immutable audit logging of all platform events |
-| HAS (Account Service) | Hedera account creation for users |
-| HFS (File Service) | Guardian MRV policy, NFT metadata, compliance reports |
-| HSCS (Smart Contract Service) | AquaVeraEscrow contract for marketplace settlement |
-| Mirror Node | Real-time balance queries, transaction verification |
-| Scheduling Service | Scheduled community reward distributions |
-| DID Method | Decentralized identifiers for organizations |
+| Guardian (MRV Policy Engine) | Verifies water data against blockchain standards (AWS, GRI 303, SDG 6) |
+| HCS (Consensus Service) | Immutable audit trail for every critical action on the platform |
+| HTS (Token Service) | WSC fungible tokens, AVIC NFT certificates, minting, burning, atomic transfers |
+| HSCS (Smart Contract Service) | AquaVeraEscrow contract for escrow & settlement of marketplace trades |
+| HAS (Account Service) | Creates Hedera account for every user on the platform |
+| HFS (File Service) | Stores MRV policy, NFT metadata, and compliance reports on-chain |
+| Hedera DID | Decentralized identity for every organization |
+| Hedera VC (Verifiable Credentials) | Verifiable Credentials for water stewardship proof |
+| Scheduling Service | Automated future transactions for recurring operations |
+| Stablecoin Studio | AVUSD stablecoin for enterprise-grade marketplace payments |
+| Mirror Nodes | Real-time balance queries, transaction history, audit trail viewing |
+| Hedera SDKs | Full SDK integration (`@hashgraph/sdk`) for all blockchain operations |
 
 ### Revenue Split (per trade)
 
@@ -82,7 +86,7 @@ npx ts-node scripts/setup-hedera.ts
 # → Copy the output IDs into your .env file
 ```
 
-> **Note:** Demo data (6 users, 3 projects, sensor readings, trades, etc.) is automatically seeded in-memory when the backend starts. No separate seed step is needed.
+> **Note:** Demo data (6 users, 3 projects, sensor readings, trades, etc.) is automatically seeded in-memory when the backend starts for the first time. Data is persisted to `backend/data/store.json` so user accounts and all changes survive restarts. To reset to fresh demo data, delete `backend/data/store.json` and restart.
 
 ### 4. Start Development Servers
 
@@ -169,5 +173,5 @@ All accounts share the password: `AquaDemo2025!`
 
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS, Recharts, React Hook Form, Zod, Sonner, Lucide React
 - **Backend**: Express, TypeScript, In-Memory Data Store, @hashgraph/sdk
-- **Blockchain**: Hedera Testnet (HTS, HCS, HAS, HFS, HSCS, Mirror Node, Scheduling, DID)
-- **Database**: In-Memory (zero external dependencies — data seeds on startup)
+- **Blockchain**: Hedera Testnet (Guardian MRV, HCS, HTS, HSCS, HAS, HFS, DID, VC, Scheduling, Stablecoin Studio, Mirror Nodes, Hedera SDKs — 12 services)
+- **Database**: In-Memory with JSON file persistence (data survives restarts — zero external dependencies)
