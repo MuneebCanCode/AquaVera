@@ -5,7 +5,8 @@
  * Provides a fluent query API compatible with how services use Supabase.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import type {
   User, WaterProject, SensorReading, WscMintingEvent,
@@ -15,14 +16,17 @@ import type {
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
 
-const DATA_DIR = join(__dirname, '../../data');
+// On Vercel serverless, the filesystem is read-only except /tmp.
+// Use /tmp for persistence there; local dev uses the project data/ folder.
+const isVercel = !!process.env.VERCEL;
+const DATA_DIR = isVercel ? '/tmp' : join(__dirname, '../../data');
 const STORE_FILE = join(DATA_DIR, 'store.json');
 let persistenceEnabled = true;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Save all tables + passwords to disk (debounced). */
 function scheduleSave(): void {
-  if (!persistenceEnabled) return;
+  if (!persistenceEnabled || batchMode) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveToDisk();
@@ -30,7 +34,15 @@ function scheduleSave(): void {
   }, 500);
 }
 
-/** Immediately write current state to disk. */
+/** Track which tables have been modified since last save. */
+const dirtyTables = new Set<string>();
+
+/** Mark a table as dirty (needs saving). */
+function markDirty(tableName: string): void {
+  dirtyTables.add(tableName);
+}
+
+/** Immediately write current state to disk (async, non-blocking). */
 export function saveToDisk(): void {
   try {
     if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -38,9 +50,29 @@ export function saveToDisk(): void {
       tables,
       passwords: Object.fromEntries(passwords),
     };
-    writeFileSync(STORE_FILE, JSON.stringify(snapshot), 'utf-8');
+    const json = JSON.stringify(snapshot);
+    dirtyTables.clear();
+    // Use async write to avoid blocking the event loop
+    writeFile(STORE_FILE, json, 'utf-8').catch((err) => {
+      console.error('[Store] Async save failed:', err.message);
+    });
   } catch (err) {
     console.error('[Store] Failed to save to disk:', (err as Error).message);
+  }
+}
+
+/** Batch insert mode — suppresses per-insert saves for bulk operations. */
+let batchMode = false;
+
+/** Run a function in batch mode (saves once at the end instead of per-insert). */
+export async function runInBatch<T>(fn: () => T | Promise<T>): Promise<T> {
+  batchMode = true;
+  try {
+    const result = await fn();
+    return result;
+  } finally {
+    batchMode = false;
+    scheduleSave();
   }
 }
 
