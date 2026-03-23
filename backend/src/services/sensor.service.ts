@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getSupabase } from './supabase';
+import { getSupabase, getTable, runInBatch } from './supabase';
 import { submitMessage } from '../hedera/hcs.service';
 import { hashData } from '../utils/hashing';
 import { SENSOR_RANGES, ANOMALY_THRESHOLDS } from '../utils/constants';
@@ -120,7 +120,7 @@ export async function simulateSensorReading(project: WaterProject): Promise<Sens
 
 /**
  * Bulk-simulate sensor readings for a project (fills a given number of days with hourly data).
- * Skips HCS submission for speed. Useful for testing the full verify & mint flow.
+ * Skips HCS submission for speed. Uses batch mode to avoid per-insert disk saves.
  */
 export async function bulkSimulateReadings(
   project: WaterProject,
@@ -133,58 +133,61 @@ export async function bulkSimulateReadings(
   await supabase.from('sensor_readings').delete().eq('project_id', project.id);
 
   const avgFlowRate = project.baseline_daily_liters / (24 * 60);
-  // Generate readings ~30% above baseline to simulate real water stewardship impact
-  // (baseline is the pre-project usage; actual readings should exceed it to earn credits)
   const impactFlowRate = avgFlowRate * 1.3;
   const rand = (min: number, max: number) => min + Math.random() * (max - min);
-  let count = 0;
 
-  for (let hour = 0; hour < days * 24; hour++) {
-    const ts = new Date(now - (days * 24 - hour) * 3600000);
-    const flowRate = rand(impactFlowRate * 0.85, impactFlowRate * 1.15);
-    const totalVolume = flowRate * 60;
+  const count = await runInBatch(() => {
+    const table = getTable<SensorReading>('sensor_readings');
+    let inserted = 0;
 
-    const mockData = {
-      project_id: project.id,
-      flow_rate_liters_per_min: parseFloat(flowRate.toFixed(2)),
-      total_volume_liters: parseFloat(totalVolume.toFixed(2)),
-      water_quality_ph: parseFloat(rand(SENSOR_RANGES.ph.min, SENSOR_RANGES.ph.max).toFixed(2)),
-      water_quality_tds: parseFloat(rand(SENSOR_RANGES.tds.min, SENSOR_RANGES.tds.max).toFixed(1)),
-      water_quality_turbidity: parseFloat(rand(SENSOR_RANGES.turbidity.min, SENSOR_RANGES.turbidity.max).toFixed(2)),
-      reservoir_level_percent: parseFloat(rand(SENSOR_RANGES.reservoir_level.min, SENSOR_RANGES.reservoir_level.max).toFixed(1)),
-      gps_latitude: project.latitude,
-      gps_longitude: project.longitude,
-      is_verified: true,
-      reading_timestamp: ts.toISOString(),
-    };
+    for (let hour = 0; hour < days * 24; hour++) {
+      const ts = new Date(now - (days * 24 - hour) * 3600000);
+      const flowRate = rand(impactFlowRate * 0.85, impactFlowRate * 1.15);
+      const totalVolume = flowRate * 60;
 
-    const dataHash = hashData({
-      flow_rate_liters_per_min: mockData.flow_rate_liters_per_min,
-      total_volume_liters: mockData.total_volume_liters,
-      water_quality_ph: mockData.water_quality_ph,
-      water_quality_tds: mockData.water_quality_tds,
-      water_quality_turbidity: mockData.water_quality_turbidity,
-      reservoir_level_percent: mockData.reservoir_level_percent,
-      gps_latitude: mockData.gps_latitude,
-      gps_longitude: mockData.gps_longitude,
-      reading_timestamp: mockData.reading_timestamp,
-    });
+      const mockData = {
+        project_id: project.id,
+        flow_rate_liters_per_min: parseFloat(flowRate.toFixed(2)),
+        total_volume_liters: parseFloat(totalVolume.toFixed(2)),
+        water_quality_ph: parseFloat(rand(SENSOR_RANGES.ph.min, SENSOR_RANGES.ph.max).toFixed(2)),
+        water_quality_tds: parseFloat(rand(SENSOR_RANGES.tds.min, SENSOR_RANGES.tds.max).toFixed(1)),
+        water_quality_turbidity: parseFloat(rand(SENSOR_RANGES.turbidity.min, SENSOR_RANGES.turbidity.max).toFixed(2)),
+        reservoir_level_percent: parseFloat(rand(SENSOR_RANGES.reservoir_level.min, SENSOR_RANGES.reservoir_level.max).toFixed(1)),
+        gps_latitude: project.latitude,
+        gps_longitude: project.longitude,
+        is_verified: true,
+        reading_timestamp: ts.toISOString(),
+      };
 
-    const isAnomaly = detectAnomaly(mockData, avgFlowRate);
+      const dataHash = hashData({
+        flow_rate_liters_per_min: mockData.flow_rate_liters_per_min,
+        total_volume_liters: mockData.total_volume_liters,
+        water_quality_ph: mockData.water_quality_ph,
+        water_quality_tds: mockData.water_quality_tds,
+        water_quality_turbidity: mockData.water_quality_turbidity,
+        reservoir_level_percent: mockData.reservoir_level_percent,
+        gps_latitude: mockData.gps_latitude,
+        gps_longitude: mockData.gps_longitude,
+        reading_timestamp: mockData.reading_timestamp,
+      });
 
-    const reading: SensorReading = {
-      id: uuidv4(),
-      ...mockData,
-      data_hash: dataHash,
-      is_anomaly: isAnomaly,
-      hcs_message_id: null,
-      hcs_consensus_timestamp: null,
-      created_at: ts.toISOString(),
-    };
+      const isAnomaly = detectAnomaly(mockData, avgFlowRate);
 
-    const { error } = await supabase.from('sensor_readings').insert(reading);
-    if (!error) count++;
-  }
+      // Push directly to table array — skip QueryBuilder overhead in batch mode
+      table.push({
+        id: uuidv4(),
+        ...mockData,
+        data_hash: dataHash,
+        is_anomaly: isAnomaly,
+        hcs_message_id: null,
+        hcs_consensus_timestamp: null,
+        created_at: ts.toISOString(),
+      } as SensorReading);
+      inserted++;
+    }
+
+    return inserted;
+  });
 
   return { count };
 }
