@@ -1,14 +1,81 @@
 /**
- * In-memory data store — replaces Supabase for zero-dependency deployment.
- * Data lives in the Express process and seeds on startup.
+ * In-memory data store with JSON file persistence.
+ * Data lives in the Express process, seeds on first startup,
+ * and persists to disk so user-created data survives restarts.
  * Provides a fluent query API compatible with how services use Supabase.
  */
 
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import type {
   User, WaterProject, SensorReading, WscMintingEvent,
   MarketplaceListing, Trade, Retirement, CommunityReward,
   Notification, ComplianceReport, ScheduledTransaction,
 } from '../types';
+
+// ─── Persistence ─────────────────────────────────────────────────────────────
+
+const DATA_DIR = join(__dirname, '../../data');
+const STORE_FILE = join(DATA_DIR, 'store.json');
+let persistenceEnabled = true;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Save all tables + passwords to disk (debounced). */
+function scheduleSave(): void {
+  if (!persistenceEnabled) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveToDisk();
+    saveTimer = null;
+  }, 500);
+}
+
+/** Immediately write current state to disk. */
+export function saveToDisk(): void {
+  try {
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    const snapshot = {
+      tables,
+      passwords: Object.fromEntries(passwords),
+    };
+    writeFileSync(STORE_FILE, JSON.stringify(snapshot), 'utf-8');
+  } catch (err) {
+    console.error('[Store] Failed to save to disk:', (err as Error).message);
+  }
+}
+
+/** Load persisted state from disk. Returns true if data was loaded. */
+export function loadFromDisk(): boolean {
+  try {
+    if (!existsSync(STORE_FILE)) return false;
+    const raw = readFileSync(STORE_FILE, 'utf-8');
+    const snapshot = JSON.parse(raw) as {
+      tables: Record<string, Record<string, unknown>[]>;
+      passwords: Record<string, string>;
+    };
+    // Restore tables
+    for (const [name, rows] of Object.entries(snapshot.tables)) {
+      tables[name] = rows;
+    }
+    // Restore passwords
+    passwords.clear();
+    for (const [email, hash] of Object.entries(snapshot.passwords)) {
+      passwords.set(email, hash);
+    }
+    return true;
+  } catch (err) {
+    console.error('[Store] Failed to load from disk:', (err as Error).message);
+    return false;
+  }
+}
+
+/** Disable persistence (useful for tests). */
+export function disablePersistence(): void {
+  persistenceEnabled = false;
+}
+
+/** Trigger a debounced save (call after direct table/password mutations). */
+export { scheduleSave as triggerSave };
 
 // ─── Table Types ─────────────────────────────────────────────────────────────
 
@@ -49,6 +116,8 @@ export function clearAll(): void {
   for (const key of Object.keys(tables)) {
     tables[key] = [];
   }
+  passwords.clear();
+  scheduleSave();
 }
 
 // ─── Fluent Query Builder (Supabase-compatible API) ──────────────────────────
@@ -205,6 +274,7 @@ class QueryBuilder<T = any> {
       for (const row of rows) {
         table.push({ ...row });
       }
+      scheduleSave();
       // If select columns were chained after insert, return inserted data
       if (this.selectColumns !== null || this.singleMode) {
         const inserted = rows as any[];
@@ -218,6 +288,7 @@ class QueryBuilder<T = any> {
       const before = table.length;
       const filtered = table.filter(row => !this.matchesFilters(row));
       tables[this.tableName] = filtered;
+      scheduleSave();
       return { data: null, error: null };
     }
 
@@ -230,6 +301,7 @@ class QueryBuilder<T = any> {
           updated.push(row);
         }
       }
+      scheduleSave();
       // If select() was chained, return updated rows
       if (this.selectColumns !== null || this.singleMode) {
         return { data: this.projectColumns(updated) as any[], error: null };
