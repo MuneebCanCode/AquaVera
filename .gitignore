@@ -34,8 +34,8 @@ yarn-debug.log*
 .vscode/
 .idea/
 
-# Kiro specs (optional — remove this line if you want specs in the repo)
-# .kiro/
+# Kiro specs
+.kiro/
 
 # Misc
 coverage/
