@@ -457,9 +457,29 @@ function simpleHash(str: string): string {
   return createHash('sha256').update(str).digest('hex');
 }
 
-function generateToken(): string {
-  const { randomBytes } = require('crypto');
-  return randomBytes(32).toString('hex');
+function generateToken(userId: string): string {
+  const { createHmac } = require('crypto');
+  const secret = process.env.ENCRYPTION_KEY || 'default-dev-key';
+  // Encode userId in the token so any serverless instance can verify it
+  const payload = Buffer.from(JSON.stringify({ uid: userId, iat: Date.now() })).toString('base64url');
+  const sig = createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+/** Verify an HMAC-signed token and return the userId, or null if invalid. */
+export function verifyToken(token: string): string | null {
+  try {
+    const { createHmac } = require('crypto');
+    const secret = process.env.ENCRYPTION_KEY || 'default-dev-key';
+    const [payload, sig] = token.split('.');
+    if (!payload || !sig) return null;
+    const expectedSig = createHmac('sha256', secret).update(payload).digest('base64url');
+    if (sig !== expectedSig) return null;
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    return data.uid || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -493,7 +513,9 @@ export function getDB(): InMemoryDB {
         },
       },
       getUser: async (token: string) => {
-        const userId = tokens.get(token);
+        // Try stateless HMAC token first, fall back to in-memory store
+        let userId = verifyToken(token);
+        if (!userId) userId = tokens.get(token) || null;
         if (!userId) return { data: { user: null }, error: { message: 'Invalid token' } };
         const user = getTable<Record<string, unknown>>('users').find(u => u.id === userId);
         if (!user) return { data: { user: null }, error: { message: 'User not found' } };
@@ -507,7 +529,7 @@ export function getDB(): InMemoryDB {
         }
         const user = getTable<Record<string, unknown>>('users').find(u => u.email === opts.email);
         if (!user) return { data: null, error: { message: 'User not found' } };
-        const token = generateToken();
+        const token = generateToken(user.id as string);
         tokens.set(token, user.id as string);
         return {
           data: { user: { id: user.id as string }, session: { access_token: token } },

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getTokenStore, getTable } from '../services/store';
+import { getTokenStore, getTable, verifyToken } from '../services/store';
 import type { UserRole } from '../types/enums';
 
 /**
@@ -26,8 +26,14 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
   }
 
   const token = authHeader.slice(7);
-  const tokens = getTokenStore();
-  const userId = tokens.get(token);
+  
+  // Try stateless HMAC token first (works across serverless instances)
+  let userId = verifyToken(token);
+  // Fall back to in-memory token store (for backward compat)
+  if (!userId) {
+    const tokens = getTokenStore();
+    userId = tokens.get(token) || null;
+  }
 
   if (!userId) {
     res.status(401).json({
