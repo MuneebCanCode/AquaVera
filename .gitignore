@@ -43,3 +43,6 @@ coverage/
 
 # Persisted data store (regenerated on startup)
 backend/data/store.json
+
+# Guardian portal (separate Docker project, not part of AquaVera deployment)
+guardian/
