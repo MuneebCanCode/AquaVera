@@ -60,6 +60,17 @@ app.use(cors({
 app.use(express.json());
 app.use(defaultLimiter);
 
+// ─── Root ────────────────────────────────────────────────────────────────────
+
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'AquaVera API',
+    version: '1.0.0',
+    status: 'running',
+    docs: '/api/health',
+  });
+});
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 app.use('/api/health', healthRoutes);
